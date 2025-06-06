@@ -57,6 +57,27 @@ export default function App() {
     }
   };
 
+  const downloadCsv = () => {
+    window.location.href = '/sample.csv';
+  };
+
+  const downloadXlsx = async () => {
+    const response = await fetch('/sample.csv');
+    const text = await response.text();
+    const { data } = Papa.parse<string[]>(text, { header: false });
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+    const arrayBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([arrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sample.xlsx';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (!user) {
     return (
       <form onSubmit={signIn}>
@@ -84,6 +105,10 @@ export default function App() {
       <button onClick={signOut}>Sign Out</button>
       <h1>Datei Upload</h1>
       <input type="file" accept=".csv,.xls,.xlsx" onChange={handleFile} />
+      <div>
+        <button onClick={downloadCsv}>Sample CSV herunterladen</button>
+        <button onClick={downloadXlsx}>Sample XLSX herunterladen</button>
+      </div>
       {rows.length > 0 && (
         <table>
           <tbody>
