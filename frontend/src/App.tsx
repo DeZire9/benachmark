@@ -1,43 +1,95 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createClient, User } from '@supabase/supabase-js';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default function App() {
-  const [manufacturer, setManufacturer] = useState('');
-  const [partNumber, setPartNumber] = useState('');
-  const [message, setMessage] = useState('');
+  const [user, setUser] = useState<User | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [rows, setRows] = useState<any[]>([]);
 
-  const submit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    const session = supabase.auth.session();
+    setUser(session?.user ?? null);
+    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => {
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage('');
-    try {
-      const res = await fetch('/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manufacturer, part_number: partNumber })
+    await supabase.auth.signIn({ email, password });
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.name.endsWith('.csv')) {
+      Papa.parse(file, {
+        header: true,
+        complete: result => setRows(result.data as any[])
       });
-      const data = await res.json();
-      setMessage(data.status);
-    } catch (err) {
-      setMessage('Fehler beim Upload');
+    } else if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      setRows(json as any[]);
     }
   };
 
+  if (!user) {
+    return (
+      <form onSubmit={signIn}>
+        <h1>Login</h1>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+        />
+        <button type="submit">Sign In</button>
+      </form>
+    );
+  }
+
   return (
     <div>
-      <h1>Benachmark Upload</h1>
-      <form onSubmit={submit}>
-        <input
-          placeholder="Hersteller"
-          value={manufacturer}
-          onChange={(e) => setManufacturer(e.target.value)}
-        />
-        <input
-          placeholder="Teilenummer"
-          value={partNumber}
-          onChange={(e) => setPartNumber(e.target.value)}
-        />
-        <button type="submit">Upload</button>
-      </form>
-      {message && <p>{message}</p>}
+      <button onClick={signOut}>Sign Out</button>
+      <h1>Datei Upload</h1>
+      <input type="file" accept=".csv,.xls,.xlsx" onChange={handleFile} />
+      {rows.length > 0 && (
+        <table>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i}>
+                {Object.values(row).map((cell, j) => (
+                  <td key={j}>{String(cell)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
