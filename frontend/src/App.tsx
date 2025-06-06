@@ -11,7 +11,8 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<any[][]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -42,18 +43,38 @@ export default function App() {
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setError(null);
+
+    const validate = (data: any[][]) => {
+      if (data.length === 0) {
+        setError('Die Datei ist leer.');
+        return;
+      }
+      const headers = data[0].map(h => String(h).trim().toLowerCase());
+      if (headers[0] !== 'manufacturer' || headers[1] !== 'part no') {
+        setError('Die erste Zeile muss "manufacturer" und "part no" enthalten.');
+        return;
+      }
+      for (let i = 1; i < data.length; i++) {
+        if (!data[i][0] || !data[i][1]) {
+          setError(`Zeile ${i + 1} muss Werte in Spalte 1 und 2 haben.`);
+          return;
+        }
+      }
+      setRows(data);
+    };
 
     if (file.name.endsWith('.csv')) {
-      Papa.parse(file, {
-        header: true,
-        complete: result => setRows(result.data as any[])
+      Papa.parse<string[]>(file, {
+        complete: result => validate(result.data as any[][]),
+        skipEmptyLines: true,
       });
     } else if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-      setRows(json as any[]);
+      const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
+      validate(json as any[][]);
     }
   };
 
@@ -105,6 +126,7 @@ export default function App() {
       <button onClick={signOut}>Sign Out</button>
       <h1>Datei Upload</h1>
       <input type="file" accept=".csv,.xls,.xlsx" onChange={handleFile} />
+      {error && <p style={{ color: 'red' }}>{error}</p>}
       <div>
         <button onClick={downloadCsv}>Sample CSV herunterladen</button>
         <button onClick={downloadXlsx}>Sample XLSX herunterladen</button>
@@ -114,7 +136,7 @@ export default function App() {
           <tbody>
             {rows.map((row, i) => (
               <tr key={i}>
-                {Object.values(row).map((cell, j) => (
+                {row.map((cell, j) => (
                   <td key={j}>{String(cell)}</td>
                 ))}
               </tr>
