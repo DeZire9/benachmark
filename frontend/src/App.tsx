@@ -14,19 +14,20 @@ export default function App() {
   const [rows, setRows] = useState<any[]>([]);
 
   useEffect(() => {
-    const session = supabase.auth.session();
-    setUser(session?.user ?? null);
-    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null);
     });
     return () => {
-      listener?.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    await supabase.auth.signIn({ email, password });
+    await supabase.auth.signInWithPassword({ email, password });
   };
 
   const signOut = async () => {
