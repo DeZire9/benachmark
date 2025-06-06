@@ -30,6 +30,11 @@ export default function App() {
     await supabase.auth.signInWithPassword({ email, password });
   };
 
+  const signUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await supabase.auth.signUp({ email, password });
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
@@ -69,6 +74,7 @@ export default function App() {
           onChange={e => setPassword(e.target.value)}
         />
         <button type="submit">Sign In</button>
+        <button type="button" onClick={signUp}>Sign Up</button>
       </form>
     );
   }
