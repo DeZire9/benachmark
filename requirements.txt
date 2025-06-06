@@ -1,3 +1,7 @@
 pandas
 requests
 beautifulsoup4
+fastapi
+uvicorn
+supabase
+pydantic
