@@ -36,3 +36,29 @@ After creating the table, make sure to add a storage bucket named `uploads`
 in your Supabase project. The frontend expects the bucket name from the
 `VITE_STORAGE_BUCKET` environment variable.
 
+To allow authenticated users to interact with the bucket, run the following
+policies on `storage.objects`:
+
+```sql
+CREATE POLICY "Logged-in users can read uploads"
+  ON storage.objects
+  FOR SELECT
+  USING (
+    bucket_id = 'uploads' AND auth.role() = 'authenticated'
+  );
+
+CREATE POLICY "Logged-in users can upload to uploads"
+  ON storage.objects
+  FOR INSERT
+  WITH CHECK (
+    bucket_id = 'uploads' AND auth.role() = 'authenticated'
+  );
+
+CREATE POLICY "Logged-in users can update uploads"
+  ON storage.objects
+  FOR UPDATE
+  USING (
+    bucket_id = 'uploads' AND auth.role() = 'authenticated'
+  );
+```
+
