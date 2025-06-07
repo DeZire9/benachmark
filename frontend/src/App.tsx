@@ -92,8 +92,8 @@ export default function App() {
     };
 
     if (file.name.endsWith('.csv')) {
-      Papa.parse<string[]>(file, {
-        complete: async result => {
+      Papa.parse(file, {
+        complete: async (result: Papa.ParseResult<string[]>) => {
           await afterValidation(result.data as any[][]);
         },
         skipEmptyLines: true,
@@ -114,7 +114,7 @@ export default function App() {
   const downloadXlsx = async () => {
     const response = await fetch('/sample.csv');
     const text = await response.text();
-    const { data } = Papa.parse<string[]>(text, { header: false });
+    const { data } = Papa.parse(text, { header: false }) as Papa.ParseResult<string[]>;
     const worksheet = XLSX.utils.aoa_to_sheet(data);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
