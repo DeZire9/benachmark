@@ -12,7 +12,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rows, setRows] = useState<any[][]>([]);
+  const [rows, setRows] = useState<string[][]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -23,9 +23,7 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null);
     });
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (e: React.FormEvent) => {
@@ -42,69 +40,89 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
+  const parseCsvFile = (file: File): Promise<string[][]> => {
+    return new Promise((resolve, reject) => {
+      Papa.parse<string[]>(file, {
+        complete: results => {
+          if (results.errors.length) {
+            reject(results.errors[0].message);
+          } else {
+            resolve(results.data as string[][]);
+          }
+        },
+        skipEmptyLines: true,
+      });
+    });
+  };
+
+  const parseExcelFile = async (file: File): Promise<string[][]> => {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
+    return data as string[][];
+  };
+
+  const validateRows = (data: string[][]): boolean => {
+    if (data.length === 0) {
+      setError('Die Datei ist leer.');
+      return false;
+    }
+    const headers = data[0].map(h => String(h).trim().toLowerCase());
+    if (headers[0] !== 'manufacturer' || headers[1] !== 'part no') {
+      setError('Die erste Zeile muss "manufacturer" und "part no" enthalten.');
+      return false;
+    }
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i] || [];
+      const cells = row.map(cell => String(cell).trim());
+      if (cells.every(c => c === '')) continue;
+      if (cells[0] === '' || cells[1] === '') {
+        setError(`Zeile ${i + 1} muss Werte in Spalte 1 und 2 haben.`);
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
     setMessage(null);
 
-    const validate = (data: any[][]) => {
-      if (data.length === 0) {
-        setError('Die Datei ist leer.');
-        return false;
-      }
-      const headers = data[0].map(h => String(h).trim().toLowerCase());
-      if (headers[0] !== 'manufacturer' || headers[1] !== 'part no') {
-        setError('Die erste Zeile muss "manufacturer" und "part no" enthalten.');
-        return false;
-      }
-      for (let i = 1; i < data.length; i++) {
-        const row = data[i] || [];
-        const cells = row.map(cell => String(cell).trim());
-        if (cells.every(cell => cell === '')) continue; // komplett leere Zeile
-
-        if (cells[0] === '' || cells[1] === '') {
-          setError(`Zeile ${i + 1} muss Werte in Spalte 1 und 2 haben.`);
-          return false;
-        }
-      }
-      setRows(data);
-      return true;
-    };
-
-    const afterValidation = async (data: any[][]) => {
-      if (!validate(data)) return;
-      const uploadPath = `${user?.id}/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from(bucket)
-        .upload(uploadPath, file);
-      if (uploadError) {
-        setError(`Upload fehlgeschlagen: ${uploadError.message}`);
+    let data: string[][];
+    try {
+      if (file.name.endsWith('.csv')) {
+        data = await parseCsvFile(file);
+      } else if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
+        data = await parseExcelFile(file);
+      } else {
+        setError('Nur CSV oder Excel Dateien erlaubt.');
         return;
       }
-      await supabase.from('file_uploads').insert({
-        user_id: user?.id,
-        path: uploadPath,
-        filename: file.name,
-        uploaded_at: new Date().toISOString(),
-      });
-      setMessage('Datei erfolgreich hochgeladen.');
-    };
-
-    if (file.name.endsWith('.csv')) {
-      Papa.parse(file, {
-        complete: async (result: Papa.ParseResult<string[]>) => {
-          await afterValidation(result.data as any[][]);
-        },
-        skipEmptyLines: true,
-      });
-    } else if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
-      await afterValidation(json as any[][]);
+    } catch (err) {
+      setError(`Fehler beim Parsen: ${err}`);
+      return;
     }
+
+    if (!validateRows(data)) return;
+    setRows(data);
+
+    if (!user) return;
+    const uploadPath = `${user.id}/${Date.now()}_${file.name}`;
+    const { error: uploadError } = await supabase.storage.from(bucket).upload(uploadPath, file);
+    if (uploadError) {
+      setError(`Upload fehlgeschlagen: ${uploadError.message}`);
+      return;
+    }
+    await supabase.from('file_uploads').insert({
+      user_id: user.id,
+      path: uploadPath,
+      filename: file.name,
+      uploaded_at: new Date().toISOString(),
+    });
+    setMessage('Datei erfolgreich hochgeladen.');
   };
 
   const downloadCsv = () => {
@@ -114,12 +132,14 @@ export default function App() {
   const downloadXlsx = async () => {
     const response = await fetch('/sample.csv');
     const text = await response.text();
-    const { data } = Papa.parse(text, { header: false }) as Papa.ParseResult<string[]>;
+    const { data } = Papa.parse<string[]>(text, { header: false });
     const worksheet = XLSX.utils.aoa_to_sheet(data);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
     const arrayBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([arrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const blob = new Blob([arrayBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
