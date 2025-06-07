@@ -1,0 +1,48 @@
+.app {
+  font-family: Arial, sans-serif;
+  padding: 20px;
+}
+
+.header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tab-button {
+  padding: 8px 16px;
+  border: none;
+  background-color: #f0f0f0;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  background-color: #007bff;
+  color: white;
+}
+
+.sample-buttons {
+  margin-top: 10px;
+}
+
+.success {
+  color: green;
+}
+
+.error {
+  color: red;
+}
+
+.file-section {
+  margin-bottom: 20px;
+}
+
+.table {
+  width: 100%;
+}

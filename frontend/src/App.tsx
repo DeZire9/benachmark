@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createClient, User } from '@supabase/supabase-js';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import './App.css';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -15,6 +16,9 @@ export default function App() {
   const [rows, setRows] = useState<string[][]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'upload' | 'overview'>('upload');
+  const [overview, setOverview] = useState<{ filename: string; rows: string[][] }[]>([]);
+  const [loadingOverview, setLoadingOverview] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -25,6 +29,49 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      if (activeTab !== 'overview' || !user) return;
+      setLoadingOverview(true);
+      setError(null);
+      const { data, error } = await supabase
+        .from('file_uploads')
+        .select('path, filename')
+        .eq('user_id', user.id)
+        .order('uploaded_at', { ascending: false });
+      if (error) {
+        setError(`Fehler beim Laden: ${error.message}`);
+        setLoadingOverview(false);
+        return;
+      }
+      const files = data || [];
+      const result: { filename: string; rows: string[][] }[] = [];
+      for (const f of files) {
+        const { data: blob, error: dErr } = await supabase.storage
+          .from(bucket)
+          .download(f.path);
+        if (dErr || !blob) continue;
+        const fileObj = new File([blob], f.filename);
+        try {
+          let rows: string[][] = [];
+          if (f.filename.endsWith('.csv')) {
+            rows = await parseCsvFile(fileObj);
+          } else if (f.filename.endsWith('.xls') || f.filename.endsWith('.xlsx')) {
+            rows = await parseExcelFile(fileObj);
+          }
+          if (rows.length) {
+            result.push({ filename: f.filename, rows });
+          }
+        } catch (e) {
+          // ignore parse errors
+        }
+      }
+      setOverview(result);
+      setLoadingOverview(false);
+    };
+    fetchOverview();
+  }, [activeTab, user]);
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,28 +214,70 @@ export default function App() {
   }
 
   return (
-    <div>
-      <button onClick={signOut}>Sign Out</button>
-      <h1>Datei Upload</h1>
-      <input type="file" accept=".csv,.xls,.xlsx" onChange={handleFile} />
-      {message && <p style={{ color: 'green' }}>{message}</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <div>
-        <button onClick={downloadCsv}>Sample CSV herunterladen</button>
-        <button onClick={downloadXlsx}>Sample XLSX herunterladen</button>
+    <div className="app">
+      <div className="header">
+        <button onClick={signOut}>Sign Out</button>
       </div>
-      {rows.length > 0 && (
-        <table>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={i}>
-                {row.map((cell, j) => (
-                  <td key={j}>{String(cell)}</td>
+      <div className="tabs">
+        <button
+          className={`tab-button ${activeTab === 'upload' ? 'active' : ''}`}
+          onClick={() => setActiveTab('upload')}
+        >
+          Upload
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
+          onClick={() => setActiveTab('overview')}
+        >
+          Overview
+        </button>
+      </div>
+      {activeTab === 'upload' && (
+        <div>
+          <h1>Datei Upload</h1>
+          <input type="file" accept=".csv,.xls,.xlsx" onChange={handleFile} />
+          {message && <p className="success">{message}</p>}
+          {error && <p className="error">{error}</p>}
+          <div className="sample-buttons">
+            <button onClick={downloadCsv}>Sample CSV herunterladen</button>
+            <button onClick={downloadXlsx}>Sample XLSX herunterladen</button>
+          </div>
+          {rows.length > 0 && (
+            <table>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr key={i}>
+                    {row.map((cell, j) => (
+                      <td key={j}>{String(cell)}</td>
+                    ))}
+                  </tr>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'overview' && (
+        <div>
+          {loadingOverview && <p>Loading...</p>}
+          {overview.map((file, idx) => (
+            <div key={idx} className="file-section">
+              <h3>{file.filename}</h3>
+              <table>
+                <tbody>
+                  {file.rows.map((row, i) => (
+                    <tr key={i}>
+                      {row.map((cell, j) => (
+                        <td key={j}>{String(cell)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
