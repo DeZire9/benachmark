@@ -7,7 +7,7 @@ Im eingeloggten Zustand stehen außerdem Beispiel-Dateien zum Download bereit. D
 ## Starten
 
 1. `cd frontend`
-2. `cp .env.example .env` und die Supabase-Parameter eintragen
+2. `cp .env.example .env` und die Supabase-Parameter sowie den Bucket-Namen eintragen
 3. `yarn install`
 4. `yarn dev`
 
