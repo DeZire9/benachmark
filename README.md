@@ -85,3 +85,19 @@ create policy "allow user read" on price_results
   for select using (auth.uid() = user_id);
 ```
 
+
+## Backend Job
+
+Der Ordner `backend` enthält ein kleines Node.js Skript `price-job.js`. Es lädt eine hochgeladene Datei aus dem Supabase Storage herunter, ruft für jede Zeile Beispielpreise über `dummyjson.com` ab und speichert diese in der Tabelle `price_results`.
+
+### Ausführen
+
+1. `cd backend`
+2. `npm install`
+3. Die folgenden Umgebungsvariablen setzen:
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_KEY`
+   - optional `STORAGE_BUCKET` (Standard `uploads`)
+4. `node price-job.js <USER_ID> <STORAGE_PATH> <DATEINAME>`
+
+`USER_ID` ist die ID des Nutzers, `STORAGE_PATH` der Pfad der Datei im Bucket und `DATEINAME` der Dateiname (z.B. `sample.csv`).
