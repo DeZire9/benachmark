@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const supabase = createClient(supabaseUrl, supabaseKey);
+const bucket = import.meta.env.VITE_STORAGE_BUCKET || 'uploads';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -13,6 +14,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [rows, setRows] = useState<any[][]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -39,16 +41,17 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+    setMessage(null);
 
     const validate = (data: any[][]) => {
       if (data.length === 0) {
         setError('Die Datei ist leer.');
-        return;
+        return false;
       }
       const headers = data[0].map(h => String(h).trim().toLowerCase());
       if (headers[0] !== 'manufacturer' || headers[1] !== 'part no') {
         setError('Die erste Zeile muss "manufacturer" und "part no" enthalten.');
-        return;
+        return false;
       }
       for (let i = 1; i < data.length; i++) {
         const row = data[i] || [];
@@ -57,15 +60,37 @@ export default function App() {
 
         if (cells[0] === '' || cells[1] === '') {
           setError(`Zeile ${i + 1} muss Werte in Spalte 1 und 2 haben.`);
-          return;
+          return false;
         }
       }
       setRows(data);
+      return true;
+    };
+
+    const afterValidation = async (data: any[][]) => {
+      if (!validate(data)) return;
+      const uploadPath = `${user?.id}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(uploadPath, file);
+      if (uploadError) {
+        setError(`Upload fehlgeschlagen: ${uploadError.message}`);
+        return;
+      }
+      await supabase.from('file_uploads').insert({
+        user_id: user?.id,
+        path: uploadPath,
+        filename: file.name,
+        uploaded_at: new Date().toISOString(),
+      });
+      setMessage('Datei erfolgreich hochgeladen.');
     };
 
     if (file.name.endsWith('.csv')) {
       Papa.parse<string[]>(file, {
-        complete: result => validate(result.data as any[][]),
+        complete: async result => {
+          await afterValidation(result.data as any[][]);
+        },
         skipEmptyLines: true,
       });
     } else if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
@@ -73,7 +98,7 @@ export default function App() {
       const workbook = XLSX.read(buffer, { type: 'array' });
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
-      validate(json as any[][]);
+      await afterValidation(json as any[][]);
     }
   };
 
@@ -124,6 +149,7 @@ export default function App() {
       <button onClick={signOut}>Sign Out</button>
       <h1>Datei Upload</h1>
       <input type="file" accept=".csv,.xls,.xlsx" onChange={handleFile} />
+      {message && <p style={{ color: 'green' }}>{message}</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
       <div>
         <button onClick={downloadCsv}>Sample CSV herunterladen</button>
