@@ -14,6 +14,7 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rows, setRows] = useState<string[][]>([]);
+  const [checkedRows, setCheckedRows] = useState<boolean[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'upload' | 'overview'>('upload');
@@ -154,7 +155,9 @@ export default function App() {
     }
 
     if (!validateRows(data)) return;
-    setRows(data);
+    const bodyRows = data.slice(1);
+    setRows(bodyRows);
+    setCheckedRows(new Array(bodyRows.length).fill(true));
 
     if (!user) return;
     const uploadPath = `${user.id}/${Date.now()}_${file.name}`;
@@ -170,6 +173,10 @@ export default function App() {
       uploaded_at: new Date().toISOString(),
     });
     setMessage('Datei erfolgreich hochgeladen.');
+  };
+
+  const toggleRow = (index: number) => {
+    setCheckedRows(prev => prev.map((v, i) => (i === index ? !v : v)));
   };
 
   const downloadFile = async (filePath: string, downloadName: string) => {
@@ -235,25 +242,49 @@ export default function App() {
       {activeTab === 'upload' && (
         <div>
           <h1>Datei Upload</h1>
-          <input type="file" accept=".csv,.xls,.xlsx" onChange={handleFile} />
-          {message && <p className="success">{message}</p>}
-          {error && <p className="error">{error}</p>}
-          <div className="sample-buttons">
-            <button onClick={downloadCsv}>Sample CSV herunterladen</button>
-            <button onClick={downloadXlsx}>Sample XLSX herunterladen</button>
-          </div>
+          {rows.length === 0 && (
+            <>
+              <input type="file" accept=".csv,.xls,.xlsx" onChange={handleFile} />
+              {message && <p className="success">{message}</p>}
+              {error && <p className="error">{error}</p>}
+              <div className="sample-buttons">
+                <button onClick={downloadCsv}>Sample CSV herunterladen</button>
+                <button onClick={downloadXlsx}>Sample XLSX herunterladen</button>
+              </div>
+            </>
+          )}
           {rows.length > 0 && (
-            <table>
-              <tbody>
-                {rows.map((row, i) => (
-                  <tr key={i}>
-                    {row.map((cell, j) => (
-                      <td key={j}>{String(cell)}</td>
-                    ))}
+            <div className="review-step">
+              <div className="review-header">
+                <button className="start-button">Start</button>
+              </div>
+              <table className="review-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Manufacturer</th>
+                    <th>Part no.</th>
+                    <th>Price</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {rows.map((row, i) => (
+                    <tr key={i}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={checkedRows[i]}
+                          onChange={() => toggleRow(i)}
+                        />
+                      </td>
+                      <td>{row[0]}</td>
+                      <td>{row[1]}</td>
+                      <td>{row[2] || ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
