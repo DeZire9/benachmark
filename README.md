@@ -101,3 +101,12 @@ Der Ordner `backend` enthält ein kleines Node.js Skript `price-job.js`. Es läd
 4. `node price-job.js <USER_ID> <STORAGE_PATH> <DATEINAME>`
 
 `USER_ID` ist die ID des Nutzers, `STORAGE_PATH` der Pfad der Datei im Bucket und `DATEINAME` der Dateiname (z.B. `sample.csv`).
+
+### API Server
+
+Um den Job aus dem Frontend starten zu können, kann ein kleiner Express-Server gestartet werden. Dieser stellt unter `/run-job` einen Endpunkt bereit, der den Preis-Job ausführt.
+
+```
+cd backend
+npm run server
+```

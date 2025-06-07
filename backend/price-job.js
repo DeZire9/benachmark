@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { fileURLToPath } from 'url';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
@@ -48,7 +49,7 @@ async function fetchPrices(query) {
   return Array.isArray(data.products) ? data.products.slice(0, 3) : [];
 }
 
-async function run(userId, filePath, fileName) {
+export async function run(userId, filePath, fileName) {
   const { data: blob, error } = await supabase.storage.from(bucket).download(filePath);
   if (error || !blob) throw new Error(`Download failed: ${error?.message}`);
   const buffer = await blob.arrayBuffer();
@@ -58,30 +59,43 @@ async function run(userId, filePath, fileName) {
 
   const dataRows = validateRows(rows);
 
+  const jobResults = [];
+
   for (const row of dataRows) {
     const manufacturer = String(row[0]);
     const partNo = String(row[1]);
     const products = await fetchPrices(`${manufacturer} ${partNo}`);
-    for (const p of products) {
-      await supabase.from('price_results').insert({
-        user_id: userId,
-        manufacturer,
-        part_no: partNo,
-        shop: p.brand || p.title || 'unknown',
-        price: p.price,
-        currency: 'EUR',
-      });
+
+    if (products.length) {
+      for (const p of products) {
+        await supabase.from('price_results').insert({
+          user_id: userId,
+          manufacturer,
+          part_no: partNo,
+          shop: p.brand || p.title || 'unknown',
+          price: p.price,
+          currency: 'EUR',
+        });
+      }
+      jobResults.push({ manufacturer, partNo, price: products[0].price });
+    } else {
+      jobResults.push({ manufacturer, partNo, price: null });
     }
   }
+
+  return jobResults;
 }
 
-const [userId, path, name] = process.argv.slice(2);
-if (!userId || !path || !name) {
-  console.error('Usage: node price-job.js <userId> <filePath> <fileName>');
-  process.exit(1);
-}
+const __filename = fileURLToPath(import.meta.url);
+if (process.argv[1] === __filename) {
+  const [userId, path, name] = process.argv.slice(2);
+  if (!userId || !path || !name) {
+    console.error('Usage: node price-job.js <userId> <filePath> <fileName>');
+    process.exit(1);
+  }
 
-run(userId, path, name).catch(e => {
-  console.error(e);
-  process.exit(1);
-});
+  run(userId, path, name).catch(e => {
+    console.error(e);
+    process.exit(1);
+  });
+}
