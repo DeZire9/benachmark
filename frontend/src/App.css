@@ -46,3 +46,13 @@
 .table {
   width: 100%;
 }
+
+.review-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.start-button {
+  padding: 8px 16px;
+}
