@@ -125,28 +125,24 @@ export default function App() {
     setMessage('Datei erfolgreich hochgeladen.');
   };
 
-  const downloadCsv = () => {
-    window.location.href = '/sample.csv';
-  };
-
-  const downloadXlsx = async () => {
-    const response = await fetch('/sample.csv');
-    const text = await response.text();
-    const { data } = Papa.parse<string[]>(text, { header: false }) as Papa.ParseResult<string[]>;
-    const worksheet = XLSX.utils.aoa_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
-    const arrayBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([arrayBuffer], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    });
-    const url = URL.createObjectURL(blob);
+  const downloadFile = async (filePath: string, downloadName: string) => {
+    const { data, error } = await supabase.storage.from(bucket).download(filePath);
+    if (error) {
+      setError(`Download fehlgeschlagen: ${error.message}`);
+      return;
+    }
+    if (!data) return;
+    const url = URL.createObjectURL(data);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'sample.xlsx';
+    a.download = downloadName;
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const downloadCsv = () => downloadFile('sample.csv', 'sample.csv');
+
+  const downloadXlsx = () => downloadFile('sample.xlsx', 'sample.xlsx');
 
   if (!user) {
     return (
