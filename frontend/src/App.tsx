@@ -51,7 +51,11 @@ export default function App() {
         return;
       }
       for (let i = 1; i < data.length; i++) {
-        if (!data[i][0] || !data[i][1]) {
+        const row = data[i] || [];
+        const cells = row.map(cell => String(cell).trim());
+        if (cells.every(cell => cell === '')) continue; // komplett leere Zeile
+
+        if (cells[0] === '' || cells[1] === '') {
           setError(`Zeile ${i + 1} muss Werte in Spalte 1 und 2 haben.`);
           return;
         }
