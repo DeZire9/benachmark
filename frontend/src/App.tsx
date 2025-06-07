@@ -20,6 +20,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'upload' | 'overview'>('upload');
   const [overview, setOverview] = useState<{ filename: string; rows: string[][] }[]>([]);
   const [loadingOverview, setLoadingOverview] = useState(false);
+  const [loadingJob, setLoadingJob] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -198,6 +199,44 @@ export default function App() {
 
   const downloadXlsx = () => downloadFile('sample.xlsx', 'sample.xlsx');
 
+  const startPriceJob = async () => {
+    if (!user) return;
+    setLoadingJob(true);
+    setError(null);
+    setMessage(null);
+
+    for (let i = 0; i < rows.length; i++) {
+      if (!checkedRows[i]) continue;
+      const row = rows[i];
+      const manufacturer = row[0];
+      const partNo = row[1];
+
+      try {
+        const query = encodeURIComponent(`${manufacturer} ${partNo}`);
+        const response = await fetch(`https://dummyjson.com/products/search?q=${query}`);
+        if (!response.ok) continue;
+        const data = await response.json();
+        const products = Array.isArray(data.products) ? data.products.slice(0, 3) : [];
+
+        for (const p of products) {
+          await supabase.from('price_results').insert({
+            user_id: user.id,
+            manufacturer,
+            part_no: partNo,
+            shop: p.brand || p.title || 'unknown',
+            price: p.price,
+            currency: 'EUR',
+          });
+        }
+      } catch (err) {
+        // ignore fetch errors for individual rows
+      }
+    }
+
+    setLoadingJob(false);
+    setMessage('Job finished');
+  };
+
   if (!user) {
     return (
       <form onSubmit={signIn}>
@@ -256,7 +295,9 @@ export default function App() {
           {rows.length > 0 && (
             <div className="review-step">
               <div className="review-header">
-                <button className="start-button">Start</button>
+                <button className="start-button" onClick={startPriceJob} disabled={loadingJob}>
+                  {loadingJob ? 'Running...' : 'Start'}
+                </button>
               </div>
               <table className="review-table">
                 <thead>
