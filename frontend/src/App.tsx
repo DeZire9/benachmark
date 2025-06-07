@@ -15,12 +15,15 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [rows, setRows] = useState<string[][]>([]);
   const [checkedRows, setCheckedRows] = useState<boolean[]>([]);
+  const [comparisonPrices, setComparisonPrices] = useState<(string | null)[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'upload' | 'overview'>('upload');
   const [overview, setOverview] = useState<{ filename: string; rows: string[][] }[]>([]);
   const [loadingOverview, setLoadingOverview] = useState(false);
   const [loadingJob, setLoadingJob] = useState(false);
+  const [uploadPath, setUploadPath] = useState<string | null>(null);
+  const [uploadName, setUploadName] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -159,6 +162,7 @@ export default function App() {
     const bodyRows = data.slice(1);
     setRows(bodyRows);
     setCheckedRows(new Array(bodyRows.length).fill(true));
+    setComparisonPrices(new Array(bodyRows.length).fill(null));
 
     if (!user) return;
     const uploadPath = `${user.id}/${Date.now()}_${file.name}`;
@@ -173,6 +177,8 @@ export default function App() {
       filename: file.name,
       uploaded_at: new Date().toISOString(),
     });
+    setUploadPath(uploadPath);
+    setUploadName(file.name);
     setMessage('Datei erfolgreich hochgeladen.');
   };
 
@@ -200,41 +206,34 @@ export default function App() {
   const downloadXlsx = () => downloadFile('sample.xlsx', 'sample.xlsx');
 
   const startPriceJob = async () => {
-    if (!user) return;
+    if (!user || !uploadPath || !uploadName) return;
     setLoadingJob(true);
     setError(null);
     setMessage(null);
 
-    for (let i = 0; i < rows.length; i++) {
-      if (!checkedRows[i]) continue;
-      const row = rows[i];
-      const manufacturer = row[0];
-      const partNo = row[1];
+    try {
+      const resp = await fetch('http://localhost:3001/run-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          filePath: uploadPath,
+          fileName: uploadName,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Job failed');
 
-      try {
-        const query = encodeURIComponent(`${manufacturer} ${partNo}`);
-        const response = await fetch(`https://dummyjson.com/products/search?q=${query}`);
-        if (!response.ok) continue;
-        const data = await response.json();
-        const products = Array.isArray(data.products) ? data.products.slice(0, 3) : [];
-
-        for (const p of products) {
-          await supabase.from('price_results').insert({
-            user_id: user.id,
-            manufacturer,
-            part_no: partNo,
-            shop: p.brand || p.title || 'unknown',
-            price: p.price,
-            currency: 'EUR',
-          });
-        }
-      } catch (err) {
-        // ignore fetch errors for individual rows
-      }
+      const prices = (data.results || []).map((r: any) =>
+        r.price !== null ? String(r.price) : 'Kein Preis gefunden'
+      );
+      setComparisonPrices(prices);
+      setMessage('Job finished');
+    } catch (err: any) {
+      setError(`Fehler: ${err.message || err}`);
     }
 
     setLoadingJob(false);
-    setMessage('Job finished');
   };
 
   if (!user) {
@@ -306,6 +305,7 @@ export default function App() {
                     <th>Manufacturer</th>
                     <th>Part no.</th>
                     <th>Price</th>
+                    <th>Comparison</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -321,6 +321,7 @@ export default function App() {
                       <td>{row[0]}</td>
                       <td>{row[1]}</td>
                       <td>{row[2] || ''}</td>
+                      <td>{comparisonPrices[i] ?? ''}</td>
                     </tr>
                   ))}
                 </tbody>
