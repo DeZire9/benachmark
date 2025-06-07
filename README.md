@@ -62,3 +62,26 @@ CREATE POLICY "Logged-in users can update uploads"
   );
 ```
 
+## Job Results Table
+
+Die Preise anderer Onlineshops werden nach Abschluss des Jobs in einer eigenen
+Tabelle gespeichert. Diese Tabelle kann mit folgendem SQL erstellt werden:
+
+```sql
+create table price_results (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  manufacturer text not null,
+  part_no text not null,
+  shop text not null,
+  price numeric not null,
+  currency text default 'EUR',
+  collected_at timestamptz not null default now()
+);
+alter table price_results enable row level security;
+create policy "allow user inserts" on price_results
+  for insert with check (auth.uid() = user_id);
+create policy "allow user read" on price_results
+  for select using (auth.uid() = user_id);
+```
+
