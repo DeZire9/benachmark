@@ -88,7 +88,9 @@ create policy "allow user read" on price_results
 
 ## Backend Job
 
-Der Ordner `backend` enthält ein kleines Node.js Skript `price-job.js`. Es lädt eine hochgeladene Datei aus dem Supabase Storage herunter, ruft für jede Zeile Beispielpreise über `dummyjson.com` ab und speichert diese in der Tabelle `price_results`.
+Der Ordner `backend` enthält ein kleines Node.js Skript `price-job.js`. Es lädt eine hochgeladene Datei aus dem Supabase Storage herunter und sammelt zu jeder Zeile Beispielpreise aus mehreren Quellen (u.a. `dummyjson.com` und `fakestoreapi.com`). Die Ergebnisse werden in der Tabelle `price_results` gespeichert.
+
+Die ermittelten Preise dienen nur als Beispiel und können ungenau oder veraltet sein. Vor der Nutzung sollten die Werte auf den offiziellen Shop-Websites überprüft werden. Außerdem ist zu beachten, dass das Scrapen von Webseiten nur erfolgen darf, wenn es die jeweiligen Nutzungsbedingungen erlauben.
 
 ### Ausführen
 
