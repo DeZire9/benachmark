@@ -42,11 +42,42 @@ function validateRows(rows) {
   return rows.slice(1).filter(r => r[0] && r[1]);
 }
 
-async function fetchPrices(query) {
-  const response = await fetch(`https://dummyjson.com/products/search?q=${encodeURIComponent(query)}`);
+async function fetchDummyJsonPrices(query) {
+  const response = await fetch(
+    `https://dummyjson.com/products/search?q=${encodeURIComponent(query)}`
+  );
   if (!response.ok) return [];
   const data = await response.json();
-  return Array.isArray(data.products) ? data.products.slice(0, 3) : [];
+  if (!Array.isArray(data.products)) return [];
+  return data.products.slice(0, 3).map(p => ({
+    shop: p.brand || 'dummyjson',
+    title: p.title,
+    price: p.price,
+  }));
+}
+
+async function fetchFakeStorePrices(query) {
+  const response = await fetch('https://fakestoreapi.com/products');
+  if (!response.ok) return [];
+  const data = await response.json();
+  if (!Array.isArray(data)) return [];
+  const lower = query.toLowerCase();
+  return data
+    .filter(
+      p =>
+        String(p.title).toLowerCase().includes(lower) ||
+        String(p.description).toLowerCase().includes(lower)
+    )
+    .slice(0, 3)
+    .map(p => ({ shop: 'fakestoreapi', title: p.title, price: p.price }));
+}
+
+async function fetchPrices(query) {
+  const [dummy, fake] = await Promise.all([
+    fetchDummyJsonPrices(query),
+    fetchFakeStorePrices(query),
+  ]);
+  return [...dummy, ...fake];
 }
 
 export async function run(userId, filePath, fileName) {
@@ -72,7 +103,7 @@ export async function run(userId, filePath, fileName) {
           user_id: userId,
           manufacturer,
           part_no: partNo,
-          shop: p.brand || p.title || 'unknown',
+          shop: p.shop || p.title || 'unknown',
           price: p.price,
           currency: 'EUR',
         });
